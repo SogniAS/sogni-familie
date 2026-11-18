@@ -186,3 +186,10 @@ do $$ begin
   begin alter publication supabase_realtime add table public.members;  exception when duplicate_object then null; end;
   begin alter publication supabase_realtime add table public.families; exception when duplicate_object then null; end;
 end $$;
+
+-- Tilgang for appen. Nyere Supabase-prosjekter gir ikke dette automatisk til tabeller laget i SQL Editor.
+-- Radsperrene (RLS) over bestemmer fortsatt hvem som ser hva.
+grant usage on schema public to anon, authenticated, service_role;
+grant select, insert, update, delete on all tables in schema public to authenticated;
+grant all on all tables in schema public to service_role;
+grant usage, select on all sequences in schema public to authenticated, service_role;

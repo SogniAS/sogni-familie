@@ -185,8 +185,8 @@ function enter(fid,mid){
   S.fid=fid;S.mid=mid;S.seen=null;S.mounted=null;S.fam=null;S.loaded={fam:false,items:false,acts:false};
   $('#auth').hidden=true;$('#auth').innerHTML='';$('#app').hidden=false;
   $('#view').innerHTML='<p class="muted">Henter familien …</p>';
-  const slow=setTimeout(()=>{if(!S.loaded.items)banner('Får ikke kontakt med lagringen akkurat nå. Det du ser kan være utdatert.')},10000);
-  const fail=()=>banner('Mistet kontakten med lagringen. Last inn siden på nytt.');
+  const slow=setTimeout(()=>{if(!S.loaded.items&&!failed)banner('Får ikke kontakt med lagringen akkurat nå. Det du ser kan være utdatert.')},10000);
+  let failed=false;const fail=e=>{failed=true;banner('Mistet kontakten med lagringen. Last inn siden på nytt.'+(e&&e.message?' ('+e.message+')':''))};
   S.unsubs.push(Back.watchFamily(fid,(fam,meta)=>{
     if(!fam){onboarding();toast('Du er ikke lenger med i familien.');return}
     S.fam=fam;S.loaded.fam=true;
