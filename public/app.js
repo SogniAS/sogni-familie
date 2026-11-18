@@ -175,7 +175,7 @@ function onboarding(){const inv=inviteCode();
   $('#lo').onclick=logout;
   if(inv){$('#join').onclick=()=>join(inv);return}
   $('#cf').onsubmit=async e=>{e.preventDefault();const n=name();if(!n)return;const fn=$('#fn2').value.trim()||('Familien '+n);
-    try{const r=await q(SB.rpc('create_family',{fname:fn,myname:n}));S.fid=r.family_id;S.mid=r.member_id;await act('startet familien');enter(r.family_id,r.member_id)}catch(e){err('Klarte ikke å lage familien. Prøv igjen.')}};
+    try{const r=await q(SB.rpc('create_family',{fname:fn,myname:n}));S.fid=r.family_id;S.mid=r.member_id;await act('startet familien');enter(r.family_id,r.member_id)}catch(e){err('Klarte ikke å lage familien. Prøv igjen. ('+esc(e&&e.message||'ukjent feil')+')')}};
   $('#jf').onsubmit=e=>{e.preventDefault();const c=$('#jc').value.trim().toUpperCase();if(c.length<6){err('Familiekoden har 6 tegn.');return}join(c)};
 }
 

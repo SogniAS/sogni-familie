@@ -118,11 +118,13 @@ create policy act_add  on public.activity for insert with check (public.is_membe
 -- Lage og bli med i familie ---------------------------------------------
 create or replace function public.create_family(fname text, myname text)
 returns json language plpgsql security definer set search_path = public as $$
-declare f uuid; m uuid; c text; tries int := 0;
+declare f uuid; m uuid; c text; tries int := 0; i int;
 begin
   if auth.uid() is null then raise exception 'not_signed_in'; end if;
   loop
-    c := upper(substr(translate(encode(gen_random_bytes(8), 'base64'), '+/=01OIl', ''), 1, 6));
+    -- Familiekode: 6 tegn uten de som er lette å blande (0/O, 1/I/L). Bruker ikke pgcrypto, som ligger i et annet skjema i Supabase.
+    c := '';
+    for i in 1..6 loop c := c || substr('ABCDEFGHJKMNPQRSTUVWXYZ23456789', 1 + floor(random() * 31)::int, 1); end loop;
     exit when char_length(c) = 6 and not exists (select 1 from families where code = c);
     tries := tries + 1; if tries > 20 then raise exception 'code_failed'; end if;
   end loop;
