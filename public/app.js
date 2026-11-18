@@ -127,24 +127,31 @@ function welcome(){
     ${inviteCode()?`<div class="box small">Du er invitert til en familie. Logg inn først, så blir du med.</div>`:''}
     <div class="field"><label for="em">Din e-post</label><input class="input" id="em" type="email" inputmode="email" autocomplete="email" required placeholder="navn@epost.no"></div>
     <div id="err" class="err" hidden></div>
-    <button class="btn block" id="go">Send meg en kode</button>
-    <p class="muted small" style="margin:0">Vi sender en kode på e-post. Du trenger ikke passord.</p></form>`);
+    <button class="btn block" id="go">Send meg innloggingslenke</button>
+    <p class="muted small" style="margin:0">Vi sender en e-post med en lenke du trykker på. Du trenger ikke passord.</p></form>`);
+  const le=linkError();if(le){$('#err').hidden=false;$('#err').textContent=le}
   $('#f').onsubmit=async e=>{e.preventDefault();const email=$('#em').value.trim();const b=$('#go');b.disabled=true;b.textContent='Sender …';
-    try{await q(SB.auth.signInWithOtp({email,options:{shouldCreateUser:true}}));codeScreen(email)}
-    catch(er){b.disabled=false;b.textContent='Send meg en kode';$('#err').hidden=false;$('#err').textContent=/rate|seconds/i.test(er.message||'')?'Vent litt før du ber om en ny kode.':'Klarte ikke å sende koden. Sjekk e-postadressen og prøv igjen.'}};
+    try{await q(SB.auth.signInWithOtp({email,options:{shouldCreateUser:true,emailRedirectTo:location.origin+'/'+(inviteCode()?'?kode='+encodeURIComponent(inviteCode()):'')}}));codeScreen(email)}
+    catch(er){b.disabled=false;b.textContent='Send meg innloggingslenke';$('#err').hidden=false;$('#err').textContent=/rate|seconds/i.test(er.message||'')?'Vent litt før du ber om en ny kode.':'Klarte ikke å sende koden. Sjekk e-postadressen og prøv igjen.'}};
 }
 function codeScreen(email){
   showAuth(`<form class="stack" id="f">
     <h2 style="font-size:30px">Sjekk e-posten</h2>
-    <p class="muted" style="margin:0">Vi har sendt en kode til <b>${esc(email)}</b>. Den kan ligge i søppelpost.</p>
-    <div class="field"><label for="cd">Koden fra e-posten</label><input class="input code" id="cd" inputmode="numeric" autocomplete="one-time-code" required maxlength="8" placeholder="123456"></div>
+    <p style="margin:0">Vi har sendt en e-post til <b>${esc(email)}</b>. Åpne den på denne telefonen eller PC-en og trykk på lenken <b>«Sign in»</b>. Da er du logget inn.</p>
+    <p class="muted small" style="margin:0">Finner du den ikke? Se i søppelpost. E-posten kommer fra Supabase.</p>
+    <details class="help"><summary>Fikk du en kode i stedet?</summary><div class="field" style="margin-top:8px"><label for="cd">Koden fra e-posten</label><input class="input code" id="cd" inputmode="numeric" autocomplete="one-time-code" maxlength="8" placeholder="123456"></div></details>
     <div id="err" class="err" hidden></div>
     <button class="btn block" id="go">Logg inn</button><button type="button" class="link" id="back">Bruk en annen e-post</button></form>`);
-  $('#cd').focus();$('#back').onclick=welcome;
-  $('#f').onsubmit=async e=>{e.preventDefault();const b=$('#go');b.disabled=true;
-    try{await q(SB.auth.verifyOtp({email,token:$('#cd').value.trim(),type:'email'}));await afterLogin()}
+  $('#back').onclick=welcome;
+  $('#f').onsubmit=async e=>{e.preventDefault();const b=$('#go');if(!$('#cd').value.trim()){$('#err').hidden=false;$('#err').textContent='Trykk på lenken i e-posten. Har du fått en kode, skriv den inn under «Fikk du en kode i stedet?».';return}b.disabled=true;
+    try{await q(SB.auth.verifyOtp({email,token:$('#cd').value.trim(),type:'email'}));await loginOnce()}
     catch(er){b.disabled=false;$('#err').hidden=false;$('#err').textContent='Koden stemmer ikke, eller den er for gammel. Prøv igjen eller be om en ny.'}};
 }
+// Feil fra en utløpt eller brukt innloggingslenke (står i adressen etter #)
+function linkError(){const h=new URLSearchParams(location.hash.slice(1));const code=h.get('error_code')||h.get('error');if(!code)return '';
+  try{history.replaceState(null,'',location.pathname+location.search)}catch(e){}
+  return /expired|otp/i.test(code)?'Lenken er for gammel eller allerede brukt. Be om en ny.':'Innloggingen virket ikke. Be om en ny lenke.'}
+let started=false;async function loginOnce(){if(started)return;started=true;await afterLogin()}
 async function afterLogin(){
   USER=(await SB.auth.getUser()).data.user;if(!USER){welcome();return}
   let mine=[];try{mine=await q(SB.from('members').select('id,family_id').eq('user_id',USER.id).limit(1))}catch(e){}
@@ -566,9 +573,11 @@ function upgradeSheet(full){const n=S.fam.members.length;
 (async function boot(){
   const cfg=window.SOGNI_CONFIG||{};
   if(!cfg.supabaseUrl||!cfg.supabaseAnonKey||!window.supabase){showAuth('<div class="box">Appen er ikke satt opp ennå. Legg inn Supabase-adressen og nøkkelen i <b>config.js</b>.</div>');return}
-  SB=window.supabase.createClient(cfg.supabaseUrl,cfg.supabaseAnonKey,{auth:{persistSession:true,autoRefreshToken:true,detectSessionInUrl:false}});
-  SB.auth.onAuthStateChange((ev)=>{if(ev==='SIGNED_OUT'&&S.fam){S.unsubs.forEach(u=>{try{u()}catch(e){}});S.unsubs=[];S.fam=null;welcome()}});
+  // Innlogging med lenke i e-posten: implicit flow virker selv om lenken åpnes i en annen nettleser enn der den ble bestilt.
+  SB=window.supabase.createClient(cfg.supabaseUrl,cfg.supabaseAnonKey,{auth:{persistSession:true,autoRefreshToken:true,detectSessionInUrl:true,flowType:'implicit'}});
+  SB.auth.onAuthStateChange((ev,session)=>{if(ev==='SIGNED_OUT'){started=false;if(S.fam){S.unsubs.forEach(u=>{try{u()}catch(e){}});S.unsubs=[];S.fam=null;welcome()}}
+    else if(ev==='SIGNED_IN'&&session&&!S.fam&&!$('#auth').hidden)setTimeout(loginOnce,0)});
   const {data}=await SB.auth.getSession();
-  if(data&&data.session)await afterLogin();else welcome();
+  if(data&&data.session)await loginOnce();else welcome();
   if('serviceWorker' in navigator){try{navigator.serviceWorker.register('/sw.js')}catch(e){}}
 })();

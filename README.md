@@ -10,25 +10,24 @@ Appen er en nettside som kan legges på hjemskjermen (PWA). Den virker på Andro
 1. Gå til supabase.com og lag et nytt prosjekt. Velg region **Stockholm (eu-north-1)**. Skriv ned database-passordet et trygt sted.
 2. Åpne **SQL Editor**, trykk **New query**, lim inn alt fra `supabase/schema.sql` og trykk **Run**.
 3. Åpne **Authentication → Sign In / Providers → Email**. Sjekk at **Email** er på.
-4. Åpne **Authentication → Emails**, og bytt teksten i både **Magic Link** og **Confirm signup** til:
-   ```
-   <h2>Din kode til SOGNI</h2>
-   <p>Skriv inn denne koden i appen: <b>{{ .Token }}</b></p>
-   ```
+4. Innlogging skjer med en lenke i e-posten («Sign in»). Standard-e-posten fra Supabase virker uten endringer.
+   Senere (anbefalt før lansering): sett opp egen e-post (SMTP, f.eks. Resend med sogni.no) under **Authentication → Emails → Set up SMTP**.
+   Da kan e-posten skrives på norsk med SOGNI-navnet, og vise en kode i tillegg: `<p>Eller skriv inn koden: <b>{{ .Token }}</b></p>`.
+   Koden trengs på iPhone når appen er lagt på Hjem-skjermen, fordi lenken åpnes i Safari og ikke i appen.
 5. Åpne **Project Settings → API Keys**. Kopier **Publishable key** (eller den gamle **anon public**) og lim den inn i `public/config.js` sammen med prosjektadressen.
 
 ### 2. Netlify (legger appen ut på nett)
 1. Gå til netlify.com, velg **Add new site → Import an existing project → GitHub** og velg `sogni-familie`.
 2. La **Build command** stå tom. **Publish directory** er `public`. Trykk **Deploy**.
 3. Under **Domain management** legger du til `app.sogni.no`. Netlify viser én DNS-linje (CNAME) som legges inn hos den som har domenet.
-4. Gå tilbake til Supabase: **Authentication → URL Configuration** og sett **Site URL** til `https://app.sogni.no`.
+4. Gå tilbake til Supabase: **Authentication → URL Configuration**. Sett **Site URL** til `https://app.sogni.no`, og legg til disse under **Redirect URLs**: `https://app.sogni.no/**` og adressen Netlify ga dere, f.eks. `https://sogni-familie.netlify.app/**`.
 
 5. Under **Site configuration → Environment variables** legger du inn to verdier, så Spond og andre kalendere oppdateres automatisk hver 3. time:
    - `SUPABASE_URL`: samme Project URL som i `config.js`
    - `SUPABASE_SERVICE_ROLE_KEY`: fra Supabase **Project Settings → API Keys**, nøkkelen **secret** (eller den gamle **service_role**). Denne er hemmelig og skal bare ligge i Netlify, aldri i koden.
 
 ### 3. Prøv
-Åpne app.sogni.no på mobilen, skriv e-posten din og koden du får. Lag familien, og send invitasjonslenken under «Familien» til de andre. Legg appen på hjemskjermen: Android/Samsung: menyen ⋮ → «Legg til på startskjermen». iPhone: Del-knappen → «Legg til på Hjem-skjerm».
+Åpne app.sogni.no på mobilen, skriv e-posten din og trykk på lenken i e-posten. Lag familien, og send invitasjonslenken under «Familien» til de andre. Legg appen på hjemskjermen: Android/Samsung: menyen ⋮ → «Legg til på startskjermen». iPhone: Del-knappen → «Legg til på Hjem-skjerm».
 
 ## Mapper
 - `public/` – selve appen (HTML, CSS, JavaScript, ikoner, `sw.js` for bruk uten nett)
