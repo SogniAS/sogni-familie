@@ -1,5 +1,5 @@
 // Oppdaterer alle kalenderlenker (Spond, skole, jobb …) automatisk hver 3. time, også når ingen har appen åpen.
-// Krever to miljøvariabler i Netlify: SUPABASE_URL og SUPABASE_SERVICE_ROLE_KEY.
+// Krever to miljøvariabler i Netlify: SUPABASE_URL og SUPABASE_SERVICE_ROLE_KEY (secret-nøkkelen sb_secret_… eller den gamle service_role).
 import ICS from '../../public/ics.js';
 import { safeUrl, fetchText } from '../lib/fetch-guard.mjs';
 
@@ -34,7 +34,7 @@ export default async () => {
   if (!base || !key) { console.log('feeds-sync: SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY mangler'); return; }
   const rest = async (method, path, body, prefer) => {
     const r = await fetch(`${base}/rest/v1/${path}`, { method, body: body ? JSON.stringify(body) : undefined,
-      headers: { apikey: key, authorization: `Bearer ${key}`, 'content-type': 'application/json', ...(prefer ? { prefer } : {}) } });
+      headers: { apikey: key, ...(key.startsWith('eyJ') ? { authorization: `Bearer ${key}` } : {}), 'content-type': 'application/json', ...(prefer ? { prefer } : {}) } });
     if (!r.ok) throw new Error(`${method} ${path.split('?')[0]}: ${r.status} ${await r.text()}`);
     return r.status === 204 || method !== 'GET' ? null : r.json();
   };

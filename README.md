@@ -10,12 +10,12 @@ Appen er en nettside som kan legges på hjemskjermen (PWA). Den virker på Andro
 1. Gå til supabase.com og lag et nytt prosjekt. Velg region **Stockholm (eu-north-1)**. Skriv ned database-passordet et trygt sted.
 2. Åpne **SQL Editor**, trykk **New query**, lim inn alt fra `supabase/schema.sql` og trykk **Run**.
 3. Åpne **Authentication → Sign In / Providers → Email**. Sjekk at **Email** er på.
-4. Åpne **Authentication → Emails → Magic Link** og bytt teksten til:
+4. Åpne **Authentication → Emails**, og bytt teksten i både **Magic Link** og **Confirm signup** til:
    ```
    <h2>Din kode til SOGNI</h2>
    <p>Skriv inn denne koden i appen: <b>{{ .Token }}</b></p>
    ```
-5. Åpne **Project Settings → API**. Kopier **Project URL** og **anon public**-nøkkelen, og lim dem inn i `public/config.js`.
+5. Åpne **Project Settings → API Keys**. Kopier **Publishable key** (eller den gamle **anon public**) og lim den inn i `public/config.js` sammen med prosjektadressen.
 
 ### 2. Netlify (legger appen ut på nett)
 1. Gå til netlify.com, velg **Add new site → Import an existing project → GitHub** og velg `sogni-familie`.
@@ -25,7 +25,7 @@ Appen er en nettside som kan legges på hjemskjermen (PWA). Den virker på Andro
 
 5. Under **Site configuration → Environment variables** legger du inn to verdier, så Spond og andre kalendere oppdateres automatisk hver 3. time:
    - `SUPABASE_URL`: samme Project URL som i `config.js`
-   - `SUPABASE_SERVICE_ROLE_KEY`: fra Supabase **Project Settings → API**, nøkkelen **service_role**. Denne er hemmelig og skal bare ligge i Netlify, aldri i koden.
+   - `SUPABASE_SERVICE_ROLE_KEY`: fra Supabase **Project Settings → API Keys**, nøkkelen **secret** (eller den gamle **service_role**). Denne er hemmelig og skal bare ligge i Netlify, aldri i koden.
 
 ### 3. Prøv
 Åpne app.sogni.no på mobilen, skriv e-posten din og koden du får. Lag familien, og send invitasjonslenken under «Familien» til de andre. Legg appen på hjemskjermen: Android/Samsung: menyen ⋮ → «Legg til på startskjermen». iPhone: Del-knappen → «Legg til på Hjem-skjerm».
