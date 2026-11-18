@@ -2,5 +2,5 @@
 // Begge verdiene er laget for å ligge åpent i en nettside.
 window.SOGNI_CONFIG = {
   supabaseUrl: "https://uziarzcjemunmarzaiuq.supabase.co",
-  supabaseAnonKey: ""
+  supabaseAnonKey: "sb_publishable_yfYJHcaX-zGbqDvfn-iAIw_OJgY1Gvm"
 };
