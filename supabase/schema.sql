@@ -150,6 +150,32 @@ end $$;
 grant execute on function public.create_family(text, text) to authenticated;
 grant execute on function public.join_family(text, text) to authenticated;
 
+-- Skoleruta (type 'school') kom til senere: sørg for at den er tillatt også i eldre databaser.
+alter table public.items drop constraint if exists items_type_check;
+alter table public.items add constraint items_type_check check (type in ('event','todo','shop','dinner','school'));
+
+-- Kalenderlenker (Spond, skole, jobb …). Lenken er hemmelig, så bare den som la den inn kan se den.
+-- Avtalene fra lenken lagres i items (data.src = feeds.id), så hele familien ser dem.
+create table if not exists public.feeds (
+  id          uuid primary key default gen_random_uuid(),
+  family_id   uuid not null references public.families(id) on delete cascade,
+  owner_user  uuid not null default auth.uid() references auth.users(id) on delete cascade,
+  member_id   uuid not null references public.members(id) on delete cascade,
+  name        text not null default 'Kalender' check (char_length(name) between 1 and 40),
+  url         text not null check (char_length(url) between 10 and 2000),
+  private     boolean not null default false,
+  last_sync   timestamptz,
+  last_status text,
+  created_at  timestamptz not null default now()
+);
+create index if not exists feeds_family_idx on public.feeds(family_id);
+alter table public.feeds enable row level security;
+drop policy if exists feeds_own on public.feeds;
+create policy feeds_own on public.feeds for all
+  using (owner_user = auth.uid() and public.is_member(family_id))
+  with check (owner_user = auth.uid() and public.is_member(family_id)
+    and exists (select 1 from public.members m where m.id = member_id and m.family_id = feeds.family_id));
+
 -- Sanntid: endringer vises med en gang hos alle i familien ----------------
 do $$ begin
   begin alter publication supabase_realtime add table public.items;    exception when duplicate_object then null; end;

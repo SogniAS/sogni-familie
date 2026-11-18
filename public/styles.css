@@ -172,3 +172,18 @@ textarea.input{resize:vertical;min-height:90px;line-height:1.4}
 .err{color:var(--rose);font-size:14px;font-weight:600}
 .actrow{display:flex;gap:10px;align-items:flex-start;padding:10px 0;border-bottom:1px solid var(--line)}
 .actrow.new{background:linear-gradient(90deg,var(--fill),transparent)}
+/* Skoleruta: fri fra skolen */
+:root{--school:#6f8f8a;--school-bg:#e3ece8}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){--school:#9cc0b8;--school-bg:#2c3a36}}
+:root[data-theme="dark"]{--school:#9cc0b8;--school-bg:#2c3a36}
+.dd.ferie{background:var(--school-bg)}
+.dd.ferie.today{background:var(--accent)}
+.hlist li.sk{color:var(--school)}
+.sklabel{color:var(--school);font-weight:700}
+.feedrow{display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--line)}
+.feedrow:last-child{border-bottom:none}
+.feedrow .txt{flex:1;min-width:0}
+details.help summary{cursor:pointer;font-weight:700;color:var(--head)}
+details.help ol{margin:6px 0 10px;padding-left:20px}
+details.help li{margin:2px 0}
+.box a{color:var(--head);font-weight:700}

@@ -23,6 +23,25 @@ const HOLI={};function holidays(y){if(HOLI[y])return HOLI[y];const o={},e=easter
   add(new Date(y,0,1),'Første nyttårsdag');rel('Skjærtorsdag',-3);rel('Langfredag',-2);rel('Første påskedag',0);rel('Andre påskedag',1);add(new Date(y,4,1),'Arbeidernes dag');add(new Date(y,4,17),'Grunnlovsdag');rel('Kristi himmelfartsdag',39);rel('Første pinsedag',49);rel('Andre pinsedag',50);add(new Date(y,11,25),'Første juledag');add(new Date(y,11,26),'Andre juledag');return HOLI[y]=o}
 const longDate=k=>{const d=parseYmd(k);return dayName(k)+' '+d.getDate()+'. '+MONTHS[d.getMonth()]+(d.getFullYear()!==new Date().getFullYear()?' '+d.getFullYear():'')};
 function weekOffsetOf(k){const mon=weekDays(0)[0];mon.setHours(0,0,0,0);const d=parseYmd(k);const dm=new Date(d);dm.setDate(d.getDate()-((d.getDay()+6)%7));return Math.round((dm-mon)/(7*864e5))}
+/* ---------- skoleruta ---------- */
+const SR=window.SOGNI_SKOLERUTE||{};
+const schoolCfg=()=>{const x=S.items.find(i=>i.type==='school');return x&&x.kommune?x:null};
+const addDays=(k,n)=>{const d=parseYmd(k);d.setDate(d.getDate()+n);return ymd(d)};
+// Navnet på fridagen (eller første/siste skoledag) for dato k, ellers null
+function schoolDay(k){const c=schoolCfg();if(!c)return null;const dow=(parseYmd(k).getDay()+6)%7;
+  for(const e of c.extra||[])if(k>=e.from&&k<=e.to)return dow<5?{name:e.name,off:true}:null;
+  const kd=SR[c.kommune];if(!kd)return null;
+  for(const y of kd.years)for(const o of y.off)if(k>=o[0]&&k<=o[1]&&!(c.hide||[]).includes(o[0]))return dow<5?{name:o[2],off:true}:null;
+  for(const y of kd.years){if(k===y.start)return {name:'Første skoledag',off:false};if(k===y.end)return {name:'Siste skoledag',off:false};
+    if(k>y.end&&k<=y.end.slice(0,4)+'-07-31')return dow<5?{name:'Sommerferie',off:true}:null}
+  return null}
+// Fri-perioder som starter i en gitt måned (for årsoversikten)
+function schoolPeriods(y,m){const c=schoolCfg();if(!c)return [];const pre=y+'-'+pad(m+1),out=[];
+  const kd=SR[c.kommune];if(kd)kd.years.forEach(yr=>{yr.off.forEach(o=>{if(o[0].startsWith(pre)&&!(c.hide||[]).includes(o[0]))out.push(o)});
+    if(yr.start.startsWith(pre))out.push([yr.start,yr.start,'Første skoledag']);if(yr.end.startsWith(pre))out.push([yr.end,yr.end,'Siste skoledag'])});
+  (c.extra||[]).forEach(e=>{if(e.from.startsWith(pre))out.push([e.from,e.to,e.name])});
+  return out.sort((a,b)=>a[0].localeCompare(b[0]))}
+const rangeTxt=(a,b)=>{const A=parseYmd(a),B=parseYmd(b);return a===b?A.getDate()+'.':A.getMonth()===B.getMonth()?A.getDate()+'.–'+B.getDate()+'.':A.getDate()+'. '+MONTHS[A.getMonth()].slice(0,3)+'–'+B.getDate()+'. '+MONTHS[B.getMonth()].slice(0,3)};
 const REPEAT={'':'Gjentas ikke',daily:'Hver dag',weekdays:'Hver ukedag (man–fre)',weekly:'Hver uke',biweekly:'Annenhver uke'};
 const REMIND={0:'Ingen påminnelse',15:'15 min før',30:'30 min før',60:'1 time før',120:'2 timer før',1440:'Dagen før'};
 function occurs(x,k){if(x.skip&&x.skip.includes(k))return false;if(!x.repeat)return x.date===k;if(k<x.date)return false;
@@ -62,11 +81,17 @@ const Back={
   async addAct(f,data){return q(SB.from('activity').insert({family_id:f,by_member:data.by,text:data.text.slice(0,200),at:data.at}))},
   async addMember(f,m){return q(SB.from('members').insert({family_id:f,name:m.name,color:m.color}))},
   async removeMember(id){return q(SB.from('members').delete().eq('id',id))},
-  async renameFamily(f,name){return q(SB.from('families').update({name}).eq('id',f))}
+  async renameFamily(f,name){return q(SB.from('families').update({name}).eq('id',f))},
+  async putItems(f,rows){if(!rows.length)return;return q(SB.from('items').upsert(rows.map(r=>({family_id:f,id:r.id,type:r.data.type,private:!!r.data.private,owner_user:r.data.private?USER.id:null,data:r.data,updated_at:new Date().toISOString()}))))},
+  async delItems(f,ids){if(!ids.length)return;return q(SB.from('items').delete().eq('family_id',f).in('id',ids))},
+  async listFeeds(f){return q(SB.from('feeds').select('id,member_id,name,url,private,last_sync,last_status').eq('family_id',f).order('created_at'))},
+  async addFeed(f,d){return q(SB.from('feeds').insert(Object.assign({family_id:f},d)))},
+  async delFeed(id){return q(SB.from('feeds').delete().eq('id',id))},
+  async touchFeed(id,status){return q(SB.from('feeds').update({last_sync:new Date().toISOString(),last_status:status}).eq('id',id))}
 };
 
 /* ---------- state ---------- */
-const S={cal:'uke',year:new Date().getFullYear(),fid:null,mid:null,fam:null,items:[],priv:[],fr:[],acts:[],tab:'uke',week:0,todoWho:'alle',dinMonth:new Date().getMonth()+1,seen:null,unsubs:[],loaded:{fam:false,items:false,acts:false}};
+const S={cal:'uke',year:new Date().getFullYear(),fid:null,mid:null,fam:null,items:[],priv:[],fr:[],acts:[],feeds:[],tab:'uke',week:0,todoWho:'alle',dinMonth:new Date().getMonth()+1,seen:null,unsubs:[],loaded:{fam:false,items:false,acts:false}};
 const me=()=>S.fam&&S.fam.members.find(m=>m.id===S.mid);
 const member=id=>S.fam&&S.fam.members.find(m=>m.id===id);
 const mname=id=>{const m=member(id);return m?m.name:'Noen'};
@@ -169,6 +194,7 @@ function enter(fid,mid){
     else arr.forEach(a=>{if(!S.seen.has(a.id)){S.seen.add(a.id);if(a.by!==S.mid&&Date.now()-a.at<120000){const m=member(a.by);toast(`<b>${esc(mname(a.by))}</b> ${esc(a.text)}`,m&&m.color)}}});
     S.acts=arr;S.loaded.acts=true;badge();
   },fail));
+  S.feeds=[];setTimeout(()=>loadFeeds(true),2500);
   setTab(S.tab);
 }
 function header(){const m=me();$('#famName').textContent=S.fam.name;const b=$('#meBtn');b.textContent=initials(m.name);b.style.background=m.color;b.setAttribute('aria-label','Du er '+m.name)}
@@ -204,15 +230,15 @@ const VIEWS={
 uke:{
   mount(el){const seg=`<div class="seg" role="tablist"><button data-cal="uke" aria-pressed="${S.cal==='uke'}">Uke</button><button data-cal="ar" aria-pressed="${S.cal==='ar'}">År</button></div>`;
     if(S.cal==='ar'){el.innerHTML=seg+`<div class="sechead"><div><div class="eyebrow">Hele året</div><h2>${S.year}</h2></div><div class="weeknav"><button class="navbtn" id="yp" aria-label="Forrige år">‹</button>${S.year!==new Date().getFullYear()?'<button class="btn sm ghost" id="y0">I år</button>':''}<button class="navbtn" id="yn" aria-label="Neste år">›</button></div></div>
-      <p class="muted small" style="margin:-4px 0 12px">Trykk på en dato for å skrive inn noe. Prikk betyr at noe skjer den dagen. Røde datoer er søndager og helligdager. Tallet til venstre er ukenummeret.</p><div class="months" id="months"></div>`;
+      <p class="muted small" style="margin:-4px 0 12px">Trykk på en dato for å skrive inn noe. Prikk betyr at noe skjer den dagen. Røde datoer er søndager og helligdager. Grønne dager er fri fra skolen. Tallet til venstre er ukenummeret.</p><div class="months" id="months"></div>`;
       $('#yp').onclick=()=>{S.year--;setTab('uke')};$('#yn').onclick=()=>{S.year++;setTab('uke')};const y0=$('#y0');if(y0)y0.onclick=()=>{S.year=new Date().getFullYear();setTab('uke')};}
     else{el.innerHTML=seg+weekNav()+`<button class="btn block" id="addEv" style="margin-bottom:14px">+ Legg til avtale</button><div class="stack" id="days"></div>`;bindWeekNav();$('#addEv').onclick=()=>eventSheet()}
     el.querySelectorAll('[data-cal]').forEach(b=>b.onclick=()=>{S.cal=b.dataset.cal;setTab('uke')})},
   paint(){if(S.cal==='ar')return paintYear();const today=ymd(new Date());const ev=items('event'),td=items('todo'),dn=items('dinner');
     $('#days').innerHTML=weekDays(S.week).map((d,i)=>{const k=ymd(d);const e=ev.filter(x=>occurs(x,k)).sort((a,b)=>(a.time||'99').localeCompare(b.time||'99'));const t=td.filter(x=>x.date===k);const din=dn.find(x=>x.date===k);
-      return `<section class="day ${k===today?'today':''}"><button class="dayhead" data-add="${k}" aria-label="Legg til på ${DAYS[i]} ${d.getDate()}."><span><h3 style="${holidays(d.getFullYear())[k]?'color:var(--rose)':''}">${DAYS[i]}</h3>${holidays(d.getFullYear())[k]?`<span class="small" style="color:var(--rose);font-weight:700">${holidays(d.getFullYear())[k]}</span>`:''}</span><span class="row" style="gap:10px"><span class="daydate ${i===6||holidays(d.getFullYear())[k]?'red':''}">${k===today?'I dag · ':''}${shortDate(d)}</span><span class="plus" aria-hidden="true">+</span></span></button><div class="daybody">
+      return `<section class="day ${k===today?'today':''}"><button class="dayhead" data-add="${k}" aria-label="Legg til på ${DAYS[i]} ${d.getDate()}."><span><h3 style="${holidays(d.getFullYear())[k]?'color:var(--rose)':''}">${DAYS[i]}</h3>${holidays(d.getFullYear())[k]?`<span class="small" style="color:var(--rose);font-weight:700">${holidays(d.getFullYear())[k]}</span>`:''}${(()=>{const sd=schoolDay(k);return sd&&!holidays(d.getFullYear())[k]?`<span class="small sklabel">🎒 ${esc(sd.name)}</span>`:''})()}</span><span class="row" style="gap:10px"><span class="daydate ${i===6||holidays(d.getFullYear())[k]?'red':''}">${k===today?'I dag · ':''}${shortDate(d)}</span><span class="plus" aria-hidden="true">+</span></span></button><div class="daybody">
       ${din?`<div class="dinnerline">Middag <b>${esc(dinnerTitle(din))}</b></div>`:''}
-      ${e.map(x=>`<div class="ev"><span class="time">${esc(x.time||'')}</span><span class="txt">${esc(x.text)}${x.repeat||x.remind?`<span class="muted small" style="display:block">${x.repeat?'↻ '+repeatLabel(x):''}${x.repeat&&x.remind?' · ':''}${x.remind?'🔔 '+REMIND[x.remind]:''}</span>`:''}</span>${x.private?privChip:chip(x.who)}<button class="x" data-ev="${x.id}" data-k="${k}" aria-label="Endre ${esc(x.text)}">⋯</button></div>`).join('')}
+      ${e.map(x=>`<div class="ev"><span class="time">${esc(x.time||'')}</span><span class="txt">${esc(x.text)}${x.repeat||x.remind||x.src?`<span class="muted small" style="display:block">${[x.src?'⇣ '+esc(x.srcName||'Kalender'):'',x.place?esc(x.place):'',x.repeat?'↻ '+repeatLabel(x):'',x.remind?'🔔 '+REMIND[x.remind]:''].filter(Boolean).join(' · ')}</span>`:''}</span>${x.private?privChip:chip(x.who)}<button class="x" data-ev="${x.id}" data-k="${k}" aria-label="Endre ${esc(x.text)}">⋯</button></div>`).join('')}
       ${t.map(x=>`<div class="ev ${x.done?'done':''}"><input type="checkbox" class="check" data-todo="${x.id}" ${x.done?'checked':''} aria-label="${esc(x.text)}" style="width:22px;height:22px"><span class="txt" style="${x.done?'text-decoration:line-through;color:var(--soft)':''}">${esc(x.text)}</span>${x.private?privChip:chip(x.who)}</div>`).join('')}
       <button class="addday" data-add="${k}">+ Legg til</button></div></section>`}).join('');
     $('#days').querySelectorAll('[data-add]').forEach(b=>b.onclick=()=>eventSheet(b.dataset.add));
@@ -278,13 +304,15 @@ familie:{
       <div class="small">${PRICE.base} kr for ${PRICE.incl} personer${ex?` + ${ex} ${ex===1?'ekstra person':'ekstra personer'} à ${PRICE.extra} kr`:''} · ${n} ${n===1?'person':'personer'} i familien</div></div>
     <div class="box" style="padding:4px 14px"><div class="list">${S.fam.members.map(m=>`<div class="item"><span class="avatar" style="background:${m.color};width:36px;height:36px">${esc(initials(m.name))}</span><div class="txt"><div><b>${esc(m.name)}</b>${m.id===S.mid?' <span class="muted small">(deg)</span>':''}${m.user_id?'':' <span class="muted small">· uten egen innlogging</span>'}</div><div class="meta">${items('todo').filter(t=>t.who===m.id&&!t.done).length} åpne gjøremål</div></div>${m.id!==S.mid&&S.fam.owner===(USER&&USER.id)?`<button class="x" data-rm="${m.id}" aria-label="Fjern ${esc(m.name)}">×</button>`:''}</div>`).join('')}</div></div>
     <button class="btn ghost block" id="addm">+ Legg til barn eller person uten mobil</button>
+    ${schoolBox()}
+    ${feedsBox()}
     <div class="box stack" style="gap:8px"><div class="eyebrow">Kalenderkobling</div><b>Google, Samsung og iPhone</b>
       <p class="small" style="margin:0">Hent avtaler fra en kalenderfil, for eksempel fra skolen eller idrettslaget. For å sende en avtale til din egen kalender, trykker du ⋯ på avtalen og velger «Legg i Google-kalenderen».</p>
       <button class="btn line block" id="ics">Hent avtaler fra kalenderfil</button>
       </div>
     <button class="btn line block" id="lo">Logg ut</button>`;
     $('#cp').onclick=async()=>{try{await navigator.clipboard.writeText(S.fam.code);toast('Koden er kopiert')}catch(e){toast('Koden er '+esc(S.fam.code))}};
-    $('#up').onclick=()=>upgradeSheet();$('#ics').onclick=importCalSheet;$('#addm').onclick=addMemberSheet;
+    $('#up').onclick=()=>upgradeSheet();$('#ics').onclick=importCalSheet;bindSchool();bindFeeds();$('#addm').onclick=addMemberSheet;
     $('#fam').querySelectorAll('[data-rm]').forEach(b=>b.onclick=()=>removeMemberSheet(b.dataset.rm));
     $('#lo').onclick=logout;
     $('#inv').onclick=async()=>{const link=location.origin+'/?kode='+S.fam.code;try{await navigator.clipboard.writeText(link);toast('Lenken er kopiert. Send den på SMS eller Messenger.')}catch(e){toast('Lenken er '+esc(link))}};
@@ -294,16 +322,16 @@ familie:{
 /* ---------- actions & sheets ---------- */
 function toggleTodo(id,on){const x=findItem(id);if(!x)return;const d=Object.assign({},x);delete d.id;d.done=on;safe(saveItem(id,d));if(on&&!x.private)act(`fullførte «${x.text}»`)}
 function paintYear(){const y=S.year,today=ymd(new Date()),hol=holidays(y),ev=items('event');
-  const busy={};const start=new Date(y,0,1);for(let d=new Date(start);d.getFullYear()===y;d.setDate(d.getDate()+1)){const k=ymd(d);if(ev.some(x=>(!x.repeat||x.repeat==='weekly'||x.repeat==='biweekly'?occurs(x,k):false)))busy[k]=1}
+  const busy={},sk={};const start=new Date(y,0,1);for(let d=new Date(start);d.getFullYear()===y;d.setDate(d.getDate()+1)){const k=ymd(d);if(ev.some(x=>(!x.repeat||x.repeat==='weekly'||x.repeat==='biweekly'?occurs(x,k):false)))busy[k]=1;const sd=schoolDay(k);if(sd&&sd.off)sk[k]=sd.name}
   $('#months').innerHTML=MONTHS.map((mn,m)=>{const first=new Date(y,m,1),lead=(first.getDay()+6)%7,n=new Date(y,m+1,0).getDate();
     let cells='<span class="wd wk">uke</span><span class="wd">M</span><span class="wd">T</span><span class="wd">O</span><span class="wd">T</span><span class="wd">F</span><span class="wd">L</span><span class="wd red">S</span>'+`<span class="wk">${isoWeek(first)}</span>`+'<span></span>'.repeat(lead);
-    for(let i=1;i<=n;i++){const k=y+'-'+pad(m+1)+'-'+pad(i),dow=(lead+i-1)%7;if(dow===0&&i>1)cells+=`<span class="wk">${isoWeek(new Date(y,m,i))}</span>`;cells+=`<button class="dd${k===today?' today':''}${hol[k]||dow===6?' red':''}${busy[k]?' busy':''}" data-d="${k}" aria-label="${longDate(k)}${hol[k]?', '+hol[k]:''}${busy[k]?', har avtaler':''}">${i}</button>`}
-    const hs=Object.keys(hol).filter(k=>+k.slice(5,7)===m+1).sort();
-    return `<section class="mon"><h3>${mn}</h3><div class="mgrid">${cells}</div>${hs.length?`<ul class="hlist">${hs.map(k=>`<li><b>${+k.slice(8)}.</b> ${hol[k]}</li>`).join('')}</ul>`:''}</section>`}).join('');
+    for(let i=1;i<=n;i++){const k=y+'-'+pad(m+1)+'-'+pad(i),dow=(lead+i-1)%7;if(dow===0&&i>1)cells+=`<span class="wk">${isoWeek(new Date(y,m,i))}</span>`;cells+=`<button class="dd${k===today?' today':''}${hol[k]||dow===6?' red':''}${busy[k]?' busy':''}${sk[k]?' ferie':''}" data-d="${k}" aria-label="${longDate(k)}${hol[k]?', '+hol[k]:''}${sk[k]?', '+sk[k]:''}${busy[k]?', har avtaler':''}">${i}</button>`}
+    const hs=Object.keys(hol).filter(k=>+k.slice(5,7)===m+1).map(k=>[k,`<li><b>${+k.slice(8)}.</b> ${hol[k]}</li>`]).concat(schoolPeriods(y,m).map(o=>[o[0],`<li class="sk"><b>${rangeTxt(o[0],o[1])}</b> ${esc(o[2])}</li>`])).sort((a,b)=>a[0].localeCompare(b[0]));
+    return `<section class="mon"><h3>${mn}</h3><div class="mgrid">${cells}</div>${hs.length?`<ul class="hlist">${hs.map(h=>h[1]).join('')}</ul>`:''}</section>`}).join('');
   $('#months').querySelectorAll('[data-d]').forEach(b=>b.onclick=()=>daySheet(b.dataset.d))}
-function daySheet(k){const e=items('event').filter(x=>occurs(x,k)).sort((a,b)=>(a.time||'99').localeCompare(b.time||'99'));const h=holidays(parseYmd(k).getFullYear())[k];
-  if(!e.length&&!h){eventSheet(k);return}
-  sheet(`<div class="eyebrow">${parseYmd(k).getFullYear()}</div><h2 style="text-transform:capitalize">${longDate(k)}</h2>${h?`<p class="small" style="margin:4px 0 0;color:var(--rose);font-weight:700">${h}</p>`:''}
+function daySheet(k){const e=items('event').filter(x=>occurs(x,k)).sort((a,b)=>(a.time||'99').localeCompare(b.time||'99'));const h=holidays(parseYmd(k).getFullYear())[k],sd=schoolDay(k);
+  if(!e.length&&!h&&!sd){eventSheet(k);return}
+  sheet(`<div class="eyebrow">${parseYmd(k).getFullYear()}</div><h2 style="text-transform:capitalize">${longDate(k)}</h2>${h?`<p class="small" style="margin:4px 0 0;color:var(--rose);font-weight:700">${h}</p>`:''}${sd?`<p class="small sklabel" style="margin:4px 0 0">🎒 ${esc(sd.name)}</p>`:''}
   <div class="stack" style="margin-top:12px">${e.length?`<div class="box" style="padding:4px 14px">${e.map(x=>`<div class="ev" style="padding:8px 0"><span class="time">${esc(x.time||'')}</span><span class="txt">${esc(x.text)}</span>${x.private?privChip:chip(x.who)}</div>`).join('')}</div>`:''}
   <button class="btn block" id="dnew">+ Ny avtale denne dagen</button><button class="btn line block" id="dweek">Vis uka</button></div>`,()=>{
     $('#dnew').onclick=()=>eventSheet(k);$('#dweek').onclick=()=>{closeSheet();S.cal='uke';S.week=weekOffsetOf(k);setTab('uke')}})}
@@ -321,14 +349,14 @@ function eventSheet(pre){const w=weekDays(S.week);const sel=pre||ymd(new Date())
     safe(saveItem(uid(),d));if(!pv)act(`la til «${d.text}» ${d.repeat?repeatLabel(d):longDate(d.date)}${d.time?' kl. '+d.time:''}`);closeSheet()}})}
 function eventActions(id,k){const x=findItem(id);if(!x)return;
   sheet(`<div class="eyebrow">${dayName(k)} ${parseYmd(k).getDate()}. ${MONTHS[parseYmd(k).getMonth()]}${x.time?' · kl. '+esc(x.time):''}</div><h2>${esc(x.text)}</h2>
-  <p class="muted small" style="margin:4px 0 14px">${x.repeat?'↻ Gjentas '+repeatLabel(x)+'. ':''}${x.remind?'🔔 Påminnelse '+REMIND[x.remind]+'. ':''}Lagt inn av ${esc(mname(x.by))}.</p>
+  <p class="muted small" style="margin:4px 0 14px">${x.place?'📍 '+esc(x.place)+'. ':''}${x.repeat?'↻ Gjentas '+repeatLabel(x)+'. ':''}${x.remind?'🔔 Påminnelse '+REMIND[x.remind]+'. ':''}${x.src?`Hentet fra ${esc(x.srcName||'en kalenderlenke')}. Endringer gjøres der og kommer hit av seg selv.`:'Lagt inn av '+esc(mname(x.by))+'.'}</p>
   <div class="field" style="margin-bottom:12px"><label for="am">Påminnelse</label><select class="select" id="am">${Object.entries(REMIND).map(([v,t])=>`<option value="${v}" ${+v===(x.remind||0)?'selected':''}>${t}</option>`).join('')}</select></div>
   <a class="btn ghost block" href="${esc(googleLink(x,k))}" target="_blank" rel="noopener" style="display:block;text-align:center;text-decoration:none;margin-bottom:8px">Legg i Google-kalenderen</a>
   <p class="muted small" style="margin:0 0 12px">Virker for Google-kalender og Samsung-kalender som er koblet til Google-kontoen.</p>
-  <div class="stack" style="gap:8px">${x.repeat?`<button class="btn line block" id="d1">Fjern bare denne gangen</button><button class="btn line block" id="da">Fjern alle gangene</button>`:`<button class="btn line block" id="da">Fjern avtalen</button>`}</div>`,()=>{
+  <div class="stack" style="gap:8px">${x.src?`<button class="btn line block" id="d1">Skjul denne gangen</button>`:x.repeat?`<button class="btn line block" id="d1">Fjern bare denne gangen</button><button class="btn line block" id="da">Fjern alle gangene</button>`:`<button class="btn line block" id="da">Fjern avtalen</button>`}</div>`,()=>{
     $('#am').onchange=()=>{safe(saveItem(id,Object.assign({},x,{remind:+$('#am').value})));toast('Påminnelsen er endret')};
-    const one=$('#d1');if(one)one.onclick=()=>{safe(saveItem(id,Object.assign({},x,{skip:(x.skip||[]).concat(k)})));if(!x.private)act(`avlyste «${x.text}» ${dayName(k)} ${parseYmd(k).getDate()}.`);closeSheet()};
-    $('#da').onclick=()=>{safe(removeItem(id));if(!x.private)act(`fjernet «${x.text}»${x.repeat?' (alle gangene)':''}`);closeSheet()}})}
+    const one=$('#d1');if(one)one.onclick=()=>{safe(saveItem(id,Object.assign({},x,{skip:(x.skip||[]).concat(k)})));if(!x.private&&!x.src)act(`avlyste «${x.text}» ${dayName(k)} ${parseYmd(k).getDate()}.`);closeSheet()};
+    const all=$('#da');if(all)all.onclick=()=>{safe(removeItem(id));if(!x.private)act(`fjernet «${x.text}»${x.repeat?' (alle gangene)':''}`);closeSheet()}})}
 
 /* ---------- calendar: Google link + import from .ics ---------- */
 function googleLink(x,k){const d=k.replace(/-/g,'');let dates;
@@ -337,19 +365,7 @@ function googleLink(x,k){const d=k.replace(/-/g,'');let dates;
   const rr={daily:'RRULE:FREQ=DAILY',weekdays:'RRULE:FREQ=WEEKLY;BYDAY=MO,TU,WE,TH,FR',weekly:'RRULE:FREQ=WEEKLY',biweekly:'RRULE:FREQ=WEEKLY;INTERVAL=2'}[x.repeat||''];
   const q=new URLSearchParams({action:'TEMPLATE',text:x.text,dates,ctz:'Europe/Oslo',details:'Fra SOGNI familieplanlegger'});if(rr)q.set('recur',rr);
   return 'https://calendar.google.com/calendar/render?'+q.toString()}
-function parseICS(txt){const lines=txt.replace(/\r\n[ \t]/g,'').replace(/\n[ \t]/g,'').split(/\r?\n/);const out=[];let cur=null;
-  const val=l=>l.slice(l.indexOf(':')+1).replace(/\\n/gi,' ').replace(/\\([,;\\])/g,'$1').trim();
-  for(const l of lines){if(l==='BEGIN:VEVENT'){cur={};continue}if(l==='END:VEVENT'){if(cur&&cur.text&&cur.date)out.push(cur);cur=null;continue}if(!cur)continue;
-    const key=l.split(/[;:]/)[0].toUpperCase();
-    if(key==='SUMMARY')cur.text=val(l).slice(0,60);
-    else if(key==='DTSTART'){const v=val(l),m=v.match(/^(\d{4})(\d{2})(\d{2})(?:T(\d{2})(\d{2})\d{2}(Z)?)?/);if(!m)continue;
-      if(m[4]&&m[6]){const t=new Date(Date.UTC(+m[1],+m[2]-1,+m[3],+m[4],+m[5]));cur.date=ymd(t);cur.time=pad(t.getHours())+':'+pad(t.getMinutes())}
-      else{cur.date=m[1]+'-'+m[2]+'-'+m[3];cur.time=m[4]?m[4]+':'+m[5]:''}}
-    else if(key==='RRULE'){const v=val(l).toUpperCase();const iv=+((v.match(/INTERVAL=(\d+)/)||[])[1]||1);
-      cur.repeat=v.includes('FREQ=DAILY')&&iv===1?'daily':v.includes('FREQ=WEEKLY')&&/BYDAY=MO,TU,WE,TH,FR$|BYDAY=MO,TU,WE,TH,FR;/.test(v)?'weekdays':v.includes('FREQ=WEEKLY')&&iv===1?'weekly':v.includes('FREQ=WEEKLY')&&iv===2?'biweekly':'';
-      if(!cur.repeat)cur.note='gjentas på en måte appen ikke kan ennå';cur.until=(v.match(/UNTIL=(\d{8})/)||[])[1]}}
-  const today=ymd(new Date());
-  return out.filter(e=>e.repeat?!(e.until&&e.until<today.replace(/-/g,'')):e.date>=today).sort((a,b)=>a.date.localeCompare(b.date)).slice(0,300)}
+const parseICS=txt=>SogniICS.parse(txt,{max:300});
 function importCalSheet(){
   sheet(`<h2>Hent fra kalender</h2><p class="muted small" style="margin:0 0 12px">Velg en kalenderfil (.ics). Den kan komme fra Google-kalenderen (Innstillinger, Eksporter), fra skolen eller fra idrettslaget. Bare avtaler fra i dag og fremover tas med.</p>
   <div class="stack"><input class="input" type="file" id="icsf" accept=".ics,text/calendar"><div id="icsres"></div></div>`,()=>{
@@ -361,6 +377,83 @@ function importCalSheet(){
       $('#icsgo').onclick=async()=>{const pv=!!($('#icsp')&&$('#icsp').checked),who=pv?S.mid:$('#icsw').value;$('#icsgo').disabled=true;
         for(const e of ev){await saveItem(uid(),{type:'event',text:e.text,date:e.date,time:e.time||'',who,by:S.mid,at:Date.now(),done:false,private:pv,owner:S.mid,repeat:e.repeat||'',remind:0,skip:[]}).catch(()=>{})}
         if(!pv)act(`hentet ${ev.length} avtaler fra en kalender`);closeSheet();toast(`${ev.length} avtaler er lagt inn`)}}})}
+
+/* ---------- skoleruta i «Familien» ---------- */
+function schoolBox(){const c=schoolCfg(),kd=c&&SR[c.kommune];
+  const opts=Object.entries(SR).sort((a,b)=>a[1].name.localeCompare(b[1].name,'nb')).map(([k,v])=>`<option value="${k}"${c&&c.kommune===k?' selected':''}>${esc(v.name)}</option>`).join('');
+  return `<div class="box stack" style="gap:8px"><div class="eyebrow">Skoleruta</div><b>Ferier og fridager fra skolen</b>
+    <div class="field"><label for="skk">Kommune</label><select class="select" id="skk"><option value="">Ingen valgt</option>${opts}</select></div>
+    ${kd?`<p class="small muted" style="margin:0">${kd.note?esc(kd.note)+' ':''}<a href="${esc(kd.src)}" target="_blank" rel="noopener">Se kommunens skolerute</a></p>`:`<p class="small muted" style="margin:0">Finner du ikke kommunen? Si fra, så legger vi den inn. Dere kan også legge inn fridagene selv.</p>`}
+    ${(c&&c.extra||[]).length?`<div class="list">${c.extra.map((e,i)=>`<div class="feedrow"><div class="txt"><b>${esc(e.name)}</b><div class="muted small">${rangeTxt(e.from,e.to)} ${MONTHS[parseYmd(e.to).getMonth()]} ${parseYmd(e.to).getFullYear()}</div></div><button class="x" data-skx="${i}" aria-label="Fjern ${esc(e.name)}">×</button></div>`).join('')}</div>`:''}
+    <button class="btn line block" id="skadd">+ Legg til fridag (f.eks. planleggingsdag)</button></div>`}
+function saveSchool(c,msg){safe(saveItem('skole',Object.assign({type:'school',kommune:'',extra:[],hide:[],by:S.mid,at:Date.now()},c)));if(msg)act(msg)}
+function bindSchool(){const c=schoolCfg()||S.items.find(i=>i.type==='school')||{};
+  $('#skk').onchange=()=>{const k=$('#skk').value;saveSchool(Object.assign({},c,{kommune:k}),k?`valgte skoleruta for ${SR[k].name}`:'fjernet skoleruta')};
+  document.querySelectorAll('[data-skx]').forEach(b=>b.onclick=()=>{const ex=(c.extra||[]).slice();ex.splice(+b.dataset.skx,1);saveSchool(Object.assign({},c,{extra:ex}))});
+  $('#skadd').onclick=()=>sheet(`<h2>Ny fridag</h2><p class="muted small" style="margin:0 0 12px">For dager skolen har fri som ikke står i kommunens rute, for eksempel planleggingsdager.</p><form class="stack" id="skf">
+    <div class="field"><label for="skn">Hva heter den?</label><input class="input" id="skn" required maxlength="40" value="Planleggingsdag"></div>
+    <div class="grid2"><div class="field"><label for="skf1">Fra</label><input class="input" type="date" id="skf1" required></div><div class="field"><label for="skf2">Til og med</label><input class="input" type="date" id="skf2"></div></div>
+    <button class="btn block">Lagre</button></form>`,()=>{$('#skf').onsubmit=e=>{e.preventDefault();const from=$('#skf1').value,to=$('#skf2').value&&$('#skf2').value>=from?$('#skf2').value:from;
+      const cur=S.items.find(i=>i.type==='school')||{};saveSchool(Object.assign({},cur,{extra:(cur.extra||[]).concat({from,to,name:$('#skn').value.trim()||'Fridag'})}),`la til fri fra skolen ${longDate(from)}`);closeSheet()}})}
+
+/* ---------- kalenderlenker: Spond, skole, jobb ---------- */
+const SYNC_EVERY=60*60e3;
+function feedsBox(){const mine=S.feeds,ids=new Set(mine.map(f=>f.id));
+  const others={};S.items.forEach(x=>{if(x.src&&!ids.has(x.src)){const o=others[x.src]||(others[x.src]={name:x.srcName,who:x.who,n:0});o.n++}});
+  const row=(name,who,meta,btns)=>`<div class="feedrow"><div class="txt"><b>${esc(name)}</b> ${chip(who)}<div class="muted small">${meta}</div></div>${btns||''}</div>`;
+  const status=f=>f.last_status&&f.last_status!=='ok'?'<span class="err">Fikk ikke hentet sist. Sjekk lenken.</span>':f.last_sync?'Oppdatert '+ago(Date.parse(f.last_sync)):'Ikke hentet ennå';
+  const count=id=>S.items.filter(x=>x.src===id).length;
+  return `<div class="box stack" style="gap:8px"><div class="eyebrow">Spond og andre kalendere</div><b>Hent aktiviteter automatisk</b>
+    <p class="small" style="margin:0">Lim inn en kalenderlenke én gang, så kommer treninger, kamper og avtaler inn av seg selv og oppdateres flere ganger om dagen.</p>
+    ${mine.length||Object.keys(others).length?`<div class="list">${mine.map(f=>row(f.name,f.member_id,`${count(f.id)} avtaler · ${status(f)}${f.private?' · 🔒 privat':''}`,`<button class="btn sm ghost" data-fsync="${f.id}">Oppdater</button><button class="x" data-fdel="${f.id}" aria-label="Fjern ${esc(f.name)}">×</button>`)).join('')}
+      ${Object.values(others).map(o=>row(o.name||'Kalender',o.who,`${o.n} avtaler · lagt inn av en annen i familien`)).join('')}</div>`:''}
+    <button class="btn block" id="fadd">+ Koble til Spond eller annen kalender</button></div>`}
+function bindFeeds(){$('#fadd').onclick=feedSheet;
+  document.querySelectorAll('[data-fsync]').forEach(b=>b.onclick=async()=>{const f=S.feeds.find(x=>x.id===b.dataset.fsync);b.disabled=true;b.textContent='Henter …';const r=await syncFeed(f);toast(r.ok?`${f.name} er oppdatert`:'Fikk ikke hentet kalenderen. Sjekk at lenken fortsatt virker.');loadFeeds()});
+  document.querySelectorAll('[data-fdel]').forEach(b=>b.onclick=()=>{const f=S.feeds.find(x=>x.id===b.dataset.fdel);
+    sheet(`<h2>Fjerne ${esc(f.name)}?</h2><p class="muted">Kommende avtaler fra denne kalenderen blir borte fra SOGNI. Ingenting endres i ${esc(f.name)}.</p><div class="stack"><button class="btn block" id="fdy">Ja, fjern</button><button class="btn line block" id="fdn">Avbryt</button></div>`,()=>{
+      $('#fdn').onclick=closeSheet;$('#fdy').onclick=async()=>{const today=ymd(new Date());const ids=S.items.filter(x=>x.src===f.id&&(x.repeat||x.date>=today)).map(x=>x.id);
+        try{await Back.delItems(S.fid,ids);await Back.delFeed(f.id)}catch(e){toast('Det ble ikke fjernet. Prøv igjen.');return}
+        if(!f.private)act(`koblet fra ${f.name} for ${mname(f.member_id)}`);closeSheet();loadFeeds()}})})}
+async function fetchCal(url){const r=await fetch('/api/ical?url='+encodeURIComponent(url));if(!r.ok){let e='fetch_failed';try{e=(await r.json()).error||e}catch(_){}throw new Error(e)}return r.text()}
+async function syncFeed(f,txt,first){try{txt=txt||await fetchCal(f.url)}catch(e){try{await Back.touchFeed(f.id,e.message)}catch(_){}return {ok:false}}
+  const until=ymd(new Date(Date.now()+400*864e5));const ev=SogniICS.parse(txt,{until});
+  const existing=S.items.filter(x=>x.src===f.id).map(x=>{const d=Object.assign({},x);delete d.id;return {id:x.id,data:d}});
+  const p=SogniICS.plan(f,ev,existing);
+  try{await Back.putItems(S.fid,p.upsert);await Back.delItems(S.fid,p.del);await Back.touchFeed(f.id,'ok')}catch(e){return {ok:false}}
+  const parts=[p.added&&`${p.added} ${p.added===1?'ny':'nye'}`,p.changed&&`${p.changed} endret`,p.removed&&`${p.removed} fjernet`].filter(Boolean);
+  if(!f.private&&(first||parts.length))act(first?`koblet til ${f.name} for ${mname(f.member_id)} (${ev.length} avtaler)`:`${f.name} ble oppdatert: ${parts.join(', ')}`);
+  return {ok:true,count:ev.length}}
+let feedBusy=false;
+async function loadFeeds(autoSync){if(!S.fid)return;try{S.feeds=await Back.listFeeds(S.fid)}catch(e){S.feeds=[]}paint();
+  if(!autoSync||feedBusy)return;feedBusy=true;
+  try{for(const f of S.feeds)if(!f.last_sync||Date.now()-Date.parse(f.last_sync)>SYNC_EVERY)await syncFeed(f)}finally{feedBusy=false}
+  try{S.feeds=await Back.listFeeds(S.fid)}catch(e){}paint()}
+document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible'&&S.fam)loadFeeds(true)});
+function feedSheet(){
+  sheet(`<h2>Koble til en kalender</h2><p class="muted small" style="margin:0 0 10px">Aktivitetene hentes automatisk og vises i kalenderen med navnet og fargen til personen.</p>
+  <details class="help"><summary>Slik får du lenken fra Spond</summary>
+    <p class="small" style="margin:6px 0 0">Spond legger aktivitetene inn i kalenderen på telefonen. Den kalenderen har en lenke vi kan hente fra.</p>
+    <p class="small" style="margin:8px 0 0"><b>Samsung og Android (Google-kalender)</b></p>
+    <ol class="small"><li>I Spond: trykk på profilbildet, velg <b>Kalenderinnstillinger</b> og gi tilgang til kalenderen.</li><li>Velg Google-kalenderen din som kalender for Spond.</li><li>Åpne calendar.google.com på en PC eller i nettleseren, trykk tannhjulet og så <b>Innstillinger</b>.</li><li>Velg kalenderen til venstre og finn <b>Hemmelig adresse i iCal-format</b>. Kopier den og lim den inn her.</li></ol>
+    <p class="small" style="margin:0"><b>iPhone</b></p>
+    <ol class="small"><li>I Spond: trykk på profilbildet, velg <b>Kalenderinnstillinger</b> og gi full tilgang.</li><li>Åpne Kalender-appen, trykk <b>Kalendere</b> og ⓘ ved iCloud-kalenderen Spond bruker.</li><li>Slå på <b>Offentlig kalender</b>, trykk <b>Del lenke</b> og kopier. Lim den inn her.</li></ol>
+    <p class="small muted" style="margin:0 0 8px">Tips: Lag gjerne en egen kalender som heter «Spond», så kommer bare Spond-aktivitetene med.</p></details>
+  <details class="help"><summary>Skole, barnehage, jobb og andre</summary><p class="small" style="margin:6px 0 8px">Se etter «Abonner», «iCal», «webcal» eller «Legg til i kalender». Lenker som starter med webcal:// virker også.</p></details>
+  <form class="stack" id="ff" style="margin-top:8px">
+    <div class="field"><label for="fu">Lenken</label><input class="input" id="fu" required inputmode="url" autocomplete="off" placeholder="https://… eller webcal://…"></div>
+    <div class="grid2"><div class="field"><label for="fn3">Navn</label><input class="input" id="fn3" maxlength="40" value="Spond"></div>
+    <div class="field"><label for="fw">Hvem gjelder det?</label><select class="select" id="fw">${whoOptions(S.mid)}</select></div></div>
+    ${privBox('fp')}<p id="ferr" class="err" hidden></p>
+    <button class="btn block" id="fgo">Koble til</button></form>`,()=>{
+    $('#ff').onsubmit=async e=>{e.preventDefault();const url=SogniICS.normUrl($('#fu').value),err=$('#ferr');err.hidden=true;
+      if(!url){err.textContent='Det ser ikke ut som en lenke. Kopier hele lenken og prøv igjen.';err.hidden=false;return}
+      const go=$('#fgo');go.disabled=true;go.textContent='Henter …';let txt;
+      try{txt=await fetchCal(url)}catch(x){err.textContent=x.message==='not_calendar'?'Lenken virker, men det er ikke en kalender. Sjekk at du kopierte iCal-lenken.':'Fikk ikke hentet kalenderen. Sjekk at lenken er riktig og prøv igjen.';err.hidden=false;go.disabled=false;go.textContent='Koble til';return}
+      const f={id:(crypto.randomUUID?crypto.randomUUID():uuid4()),member_id:($('#fp')&&$('#fp').checked)?S.mid:$('#fw').value,name:$('#fn3').value.trim()||'Kalender',url,private:!!($('#fp')&&$('#fp').checked)};
+      try{await Back.addFeed(S.fid,f)}catch(x){err.textContent='Det ble ikke lagret. Prøv igjen.';err.hidden=false;go.disabled=false;go.textContent='Koble til';return}
+      const r=await syncFeed(f,txt,true);closeSheet();toast(r.ok?`${esc(f.name)} er koblet til. ${r.count} avtaler hentet.`:'Lenken er lagret, men avtalene kom ikke inn ennå. Vi prøver igjen snart.');loadFeeds()}})}
+const uuid4=()=>'10000000-1000-4000-8000-100000000000'.replace(/[018]/g,c=>(c^Math.random()*16>>c/4).toString(16));
 
 /* ---------- reminders (while the app is open) ---------- */
 function checkReminders(){if(!S.fam||!S.mid)return;const now=Date.now(),key='sogni_rem_'+S.fid+'_'+S.mid;const fired=ls.get(key,{});let changed=false;

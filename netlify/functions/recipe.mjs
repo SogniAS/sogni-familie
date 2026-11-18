@@ -1,6 +1,6 @@
 // Henter en oppskrift fra en matside via sidens innebygde oppskriftsdata (schema.org Recipe).
 // GET /api/recipe?url=https://...  ->  { n, t, i: [...], s: [...] }
-const BLOCKED = /^(localhost|127\.|10\.|192\.168\.|169\.254\.|172\.(1[6-9]|2\d|3[01])\.|0\.|\[?::1\]?|\[?f[cd])/i;
+import { safeUrl, fetchText } from '../lib/fetch-guard.mjs';
 
 const json = (status, body) => new Response(JSON.stringify(body), {
   status, headers: { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'public, max-age=3600' }
@@ -34,16 +34,10 @@ function steps(ins) {
 
 export default async (req) => {
   const target = new URL(req.url).searchParams.get('url') || '';
-  let u;
-  try { u = new URL(target); } catch { return json(400, { error: 'bad_url' }); }
-  if (!/^https?:$/.test(u.protocol) || BLOCKED.test(u.hostname)) return json(400, { error: 'bad_url' });
+  const u = safeUrl(target);
+  if (!u) return json(400, { error: 'bad_url' });
   let html;
-  try {
-    const r = await fetch(u, { redirect: 'follow', signal: AbortSignal.timeout(8000),
-      headers: { 'user-agent': 'Mozilla/5.0 (compatible; SOGNI-oppskrift/1.0)', 'accept': 'text/html' } });
-    if (!r.ok) return json(502, { error: 'fetch_failed' });
-    html = (await r.text()).slice(0, 3_000_000);
-  } catch { return json(502, { error: 'fetch_failed' }); }
+  try { html = await fetchText(u, 'text/html'); } catch { return json(502, { error: 'fetch_failed' }); }
 
   let recipe = null;
   for (const m of html.matchAll(/<script[^>]*type=["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/gi)) {
