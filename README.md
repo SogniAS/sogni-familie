@@ -29,15 +29,22 @@ Appen er en nettside som kan legges på hjemskjermen (PWA). Den virker på Andro
 ### 3. Prøv
 Åpne app.sogni.no på mobilen, skriv e-posten din og trykk på lenken i e-posten. Lag familien, og send invitasjonslenken under «Familien» til de andre. Legg appen på hjemskjermen: Android/Samsung: menyen ⋮ → «Legg til på startskjermen». iPhone: Del-knappen → «Legg til på Hjem-skjerm».
 
+## Cloudflare Pages (uten «Powered by Netlify»-merket)
+1. Gå til dash.cloudflare.com → **Workers & Pages** → **Create** → **Pages** → **Connect to Git** og velg `sogni-familie`.
+2. **Framework preset**: None. **Build command**: tom. **Build output directory**: `public`. Trykk **Save and Deploy**.
+3. I Supabase: **Authentication → URL Configuration**. Sett **Site URL** til Cloudflare-adressen (`https://….pages.dev`) og legg den til under **Redirect URLs** med `/**` på slutten.
+4. I GitHub: **Settings → Secrets and variables → Actions → New repository secret**. Legg inn `SUPABASE_URL` og `SUPABASE_SERVICE_ROLE_KEY` (secret-nøkkelen fra Supabase). Da oppdateres Spond og andre kalendere hver 3. time.
+
 ## Mapper
 - `public/` – selve appen (HTML, CSS, JavaScript, ikoner, `sw.js` for bruk uten nett)
 - `public/config.js` – adressen og den offentlige nøkkelen til Supabase
 - `supabase/schema.sql` – tabeller, sperrer (Row Level Security) og sanntid
 - `public/ics.js` – leser kalenderlenker (iCal) og finner hva som er nytt, endret eller borte
 - `public/skolerute.js` – ferier og fridager per kommune. Oppdateres hvert år (juni) når kommunene har vedtatt ny skolerute
-- `netlify/functions/recipe.mjs` – henter oppskrifter fra matsider (`/api/recipe?url=…`)
-- `netlify/functions/ical.mjs` – henter en kalenderlenke for appen (`/api/ical?url=…`)
-- `netlify/functions/feeds-sync.mjs` – oppdaterer alle kalenderlenker hver 3. time
+- `server/` – serverkoden: oppskrifter fra matsider (`/api/recipe`), kalenderlenker (`/api/ical`) og oppdatering av kalenderlenker
+- `functions/api/` – kobler serverkoden til Cloudflare Pages
+- `netlify/functions/` – kobler serverkoden til Netlify (brukes til appen er flyttet)
+- `.github/workflows/feeds-sync.yml` – oppdaterer alle kalenderlenker hver 3. time (GitHub Actions)
 
 ## Spond og skoleruta
 - **Spond:** Spond legger aktivitetene inn i kalenderen på telefonen. Den kalenderen (Google eller iCloud) har en privat lenke. Lenken limes inn under «Familien → Spond og andre kalendere». Appen forklarer stegene.

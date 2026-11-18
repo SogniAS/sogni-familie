@@ -1,7 +1,7 @@
-// Oppdaterer alle kalenderlenker (Spond, skole, jobb …) automatisk hver 3. time, også når ingen har appen åpen.
-// Krever to miljøvariabler i Netlify: SUPABASE_URL og SUPABASE_SERVICE_ROLE_KEY (secret-nøkkelen sb_secret_… eller den gamle service_role).
-import ICS from '../../public/ics.js';
-import { safeUrl, fetchText } from '../lib/fetch-guard.mjs';
+// Oppdaterer alle kalenderlenker (Spond, skole, jobb …) automatisk, også når ingen har appen åpen.
+// Kjøres hver 3. time av GitHub Actions (.github/workflows/feeds-sync.yml). Krever to hemmeligheter: SUPABASE_URL og SUPABASE_SERVICE_ROLE_KEY (secret-nøkkelen sb_secret_… eller den gamle service_role).
+import ICS from '../public/ics.js';
+import { safeUrl, fetchText } from './fetch-guard.mjs';
 
 const MAX_FEEDS = 200;
 
@@ -29,8 +29,8 @@ export async function syncFeed(feed, { rest, today = ICS.todayOslo(), now = Date
   return { status: 'ok', ...p, upsert: undefined, del: undefined };
 }
 
-export default async () => {
-  const base = process.env.SUPABASE_URL, key = process.env.SUPABASE_SERVICE_ROLE_KEY;
+export default async function runSync(env = process.env) {
+  const base = env.SUPABASE_URL, key = env.SUPABASE_SERVICE_ROLE_KEY;
   if (!base || !key) { console.log('feeds-sync: SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY mangler'); return; }
   const rest = async (method, path, body, prefer) => {
     const r = await fetch(`${base}/rest/v1/${path}`, { method, body: body ? JSON.stringify(body) : undefined,
@@ -44,6 +44,4 @@ export default async () => {
     try { res = await syncFeed(f, { rest }); } catch (e) { res = { status: 'error' }; console.log('feeds-sync', f.id, e.message); }
     await rest('PATCH', `feeds?id=eq.${f.id}`, { last_sync: new Date().toISOString(), last_status: res.status }, 'return=minimal').catch(() => {});
   }
-};
-
-export const config = { schedule: '15 */3 * * *' };
+}

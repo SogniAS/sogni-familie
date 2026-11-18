@@ -1,0 +1,23 @@
+# Oppdaterer Spond og andre kalenderlenker hver 3. time, også når ingen har appen åpen.
+# Trenger to hemmeligheter under Settings -> Secrets and variables -> Actions:
+# SUPABASE_URL og SUPABASE_SERVICE_ROLE_KEY (secret-nøkkelen fra Supabase).
+name: Oppdater kalenderlenker
+on:
+  schedule:
+    - cron: '15 */3 * * *'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: node scripts/feeds-sync.mjs
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
