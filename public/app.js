@@ -134,18 +134,29 @@ function welcome(){
     try{await q(SB.auth.signInWithOtp({email,options:{shouldCreateUser:true,emailRedirectTo:location.origin+'/'+(inviteCode()?'?kode='+encodeURIComponent(inviteCode()):'')}}));codeScreen(email)}
     catch(er){b.disabled=false;b.textContent='Send meg innloggingslenke';$('#err').hidden=false;$('#err').textContent=/rate|seconds/i.test(er.message||'')?'Vent litt før du ber om en ny kode.':'Klarte ikke å sende koden. Sjekk e-postadressen og prøv igjen.'}};
 }
-function codeScreen(email){
+const isStandalone=()=>{try{return navigator.standalone===true||matchMedia('(display-mode: standalone)').matches}catch(e){return false}};
+// Lenken i e-posten (…/auth/v1/verify?token=…&type=…) kan limes inn i appen. Da logges man inn her, ikke i Safari.
+function linkToken(v){try{const u=new URL(v.trim());const t=u.searchParams.get('token')||u.searchParams.get('token_hash');if(!t)return null;
+  const ty=(u.searchParams.get('type')||'email').toLowerCase();return {token_hash:t,type:ty==='magiclink'?'email':ty}}catch(e){return null}}
+function codeScreen(email){const app=isStandalone();
   showAuth(`<form class="stack" id="f">
     <h2 style="font-size:30px">Sjekk e-posten</h2>
-    <p style="margin:0">Vi har sendt en e-post til <b>${esc(email)}</b>. Åpne den på denne telefonen eller PC-en og trykk på lenken <b>«Sign in»</b>. Da er du logget inn.</p>
-    <p class="muted small" style="margin:0">Finner du den ikke? Se i søppelpost. E-posten kommer fra Supabase.</p>
-    <details class="help"><summary>Fikk du en kode i stedet?</summary><div class="field" style="margin-top:8px"><label for="cd">Koden fra e-posten</label><input class="input code" id="cd" inputmode="numeric" autocomplete="one-time-code" maxlength="8" placeholder="123456"></div></details>
+    <p style="margin:0">Vi har sendt en e-post til <b>${esc(email)}</b>. Den kan ligge i søppelpost.</p>
+    ${app?'':`<p style="margin:0">Trykk på lenken <b>«Sign in»</b> i e-posten, så er du logget inn.</p>`}
+    <div class="box stack" style="gap:8px"><b>${app?'Logg inn her i appen':'Bruker du SOGNI som app på Hjem-skjermen?'}</b>
+      <p class="small" style="margin:0">Hold fingeren på <b>«Sign in»</b> i e-posten, velg <b>Kopier lenke</b> og lim den inn her. Har e-posten en kode, skriv koden.</p>
+      <div class="field"><label for="cd">Lenken eller koden fra e-posten</label><input class="input" id="cd" autocomplete="one-time-code" autocapitalize="off" spellcheck="false" placeholder="Lim inn lenken eller skriv koden"></div>
+      ${navigator.clipboard&&navigator.clipboard.readText?'<button type="button" class="btn line block" id="paste">Lim inn fra utklippstavlen</button>':''}</div>
     <div id="err" class="err" hidden></div>
     <button class="btn block" id="go">Logg inn</button><button type="button" class="link" id="back">Bruk en annen e-post</button></form>`);
   $('#back').onclick=welcome;
-  $('#f').onsubmit=async e=>{e.preventDefault();const b=$('#go');if(!$('#cd').value.trim()){$('#err').hidden=false;$('#err').textContent='Trykk på lenken i e-posten. Har du fått en kode, skriv den inn under «Fikk du en kode i stedet?».';return}b.disabled=true;
-    try{await q(SB.auth.verifyOtp({email,token:$('#cd').value.trim(),type:'email'}));await loginOnce()}
-    catch(er){b.disabled=false;$('#err').hidden=false;$('#err').textContent='Koden stemmer ikke, eller den er for gammel. Prøv igjen eller be om en ny.'}};
+  const pb=$('#paste');if(pb)pb.onclick=async()=>{try{$('#cd').value=(await navigator.clipboard.readText()).trim();$('#f').requestSubmit()}catch(e){$('#cd').focus()}};
+  $('#f').onsubmit=async e=>{e.preventDefault();const v=$('#cd').value.trim(),b=$('#go'),er=$('#err');er.hidden=true;
+    if(!v){er.hidden=false;er.textContent=app?'Lim inn lenken fra e-posten først.':'Trykk på lenken i e-posten, eller lim den inn i feltet.';return}
+    const lt=linkToken(v);if(!lt&&/^https?:/i.test(v)){er.hidden=false;er.textContent='Det ser ikke ut som lenken fra innloggings-e-posten. Kopier lenken «Sign in».';return}
+    b.disabled=true;b.textContent='Logger inn …';
+    try{await q(SB.auth.verifyOtp(lt?lt:{email,token:v.replace(/\s/g,''),type:'email'}));await loginOnce()}
+    catch(x){b.disabled=false;b.textContent='Logg inn';er.hidden=false;er.textContent=lt?'Lenken er for gammel eller allerede brukt. Be om en ny e-post.':'Koden stemmer ikke, eller den er for gammel. Prøv igjen eller be om en ny.'}};
 }
 // Feil fra en utløpt eller brukt innloggingslenke (står i adressen etter #)
 function linkError(){const h=new URLSearchParams(location.hash.slice(1));const code=h.get('error_code')||h.get('error');if(!code)return '';

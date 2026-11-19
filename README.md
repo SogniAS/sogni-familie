@@ -29,6 +29,16 @@ Appen er en nettside som kan legges på hjemskjermen (PWA). Den virker på Andro
 ### 3. Prøv
 Åpne app.sogni.no på mobilen, skriv e-posten din og trykk på lenken i e-posten. Lag familien, og send invitasjonslenken under «Familien» til de andre. Legg appen på hjemskjermen: Android/Samsung: menyen ⋮ → «Legg til på startskjermen». iPhone: Del-knappen → «Legg til på Hjem-skjerm».
 
+## Egen e-post (anbefalt før lansering)
+Supabase sin innebygde e-post sender bare noen få e-poster i timen. Den er laget for testing.
+1. Lag konto på resend.com og legg til domenet `sogni.no`. Legg inn DNS-linjene Resend viser hos den som har domenet.
+2. Lag en API-nøkkel i Resend.
+3. I Supabase: **Authentication → Emails → SMTP Settings**: slå på **Enable custom SMTP**. Host `smtp.resend.com`, port `465`, brukernavn `resend`, passord = API-nøkkelen, avsender `post@sogni.no`, navn `SOGNI`.
+4. **Authentication → Rate Limits**: sett e-poster per time til f.eks. 100.
+5. **Authentication → Emails**: i **Magic Link** og **Confirm signup**, legg til koden: `<p>Eller skriv inn denne koden i appen: <b>{{ .Token }}</b></p>`.
+
+På iPhone-appen (Hjem-skjerm) kan man også holde fingeren på «Sign in» i e-posten, kopiere lenken og lime den inn i appen.
+
 ## Cloudflare Pages (uten «Powered by Netlify»-merket)
 1. Gå til dash.cloudflare.com → **Workers & Pages** → **Create** → **Pages** → **Connect to Git** og velg `sogni-familie`.
 2. **Framework preset**: None. **Build command**: tom. **Build output directory**: `public`. Trykk **Save and Deploy**.
