@@ -63,5 +63,5 @@ På iPhone-appen (Hjem-skjerm) kan man også holde fingeren på «Sign in» i e-
 ## Neste steg
 - Varsler på låst telefon (web push)
 - Privat kalenderlenke for Google-, Samsung- og iPhone-kalenderen
-- Betaling med Stripe: 49 kr/mnd for 2 personer, +10 kr per ekstra person, 30 dager gratis, årspris
+- Betaling med Stripe: 49 kr/mnd for 5 personer (2 voksne og 3 barn), +10 kr per ekstra person, 30 dager gratis, årspris
 - Personvernerklæring, vilkår og «Slett kontoen min»

@@ -3,9 +3,9 @@ const MONTHS=['januar','februar','mars','april','mai','juni','juli','august','se
 const DAYS=['mandag','tirsdag','onsdag','torsdag','fredag','lørdag','søndag'];
 const COLORS=['#9c8775','#c4877f','#8a9a7b','#c9a46a','#7d8fa3','#a8879b','#6f8f8a','#b5856a'];
 /* Pricing (example): base price covers 2 people, each extra person costs a little more per month. */
-const PRICE={base:49,incl:2,extra:10,max:10};
+const PRICE={base:49,incl:5,inclText:'2 voksne og 3 barn',extra:10,max:10};
 const priceFor=n=>PRICE.base+Math.max(0,n-PRICE.incl)*PRICE.extra;
-const extraNote=n=>n>=PRICE.incl?`Person nummer ${n+1} koster ${PRICE.extra} kr ekstra i måneden. Ny pris for familien: ${priceFor(n+1)} kr/mnd (nå ${priceFor(n)} kr).`:`${PRICE.base} kr/mnd dekker ${PRICE.incl} personer, så denne personen er inkludert.`;
+const extraNote=n=>n>=PRICE.incl?`Person nummer ${n+1} koster ${PRICE.extra} kr ekstra i måneden. Ny pris for familien: ${priceFor(n+1)} kr/mnd (nå ${priceFor(n)} kr).`:`${PRICE.base} kr/mnd dekker ${PRICE.incl} personer (${PRICE.inclText}), så denne personen er inkludert.`;
 const $=s=>document.querySelector(s);
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const uid=()=>Math.random().toString(36).slice(2,9)+Date.now().toString(36).slice(-5);
@@ -319,7 +319,7 @@ familie:{
     <div class="box stack" style="gap:8px"><div class="eyebrow">Familiekode</div><div class="row between"><span class="code">${esc(S.fam.code)}</span><button class="btn sm ghost" id="cp">Kopier</button></div>
       <p class="muted small" style="margin:0">Send invitasjonslenken til de andre. De logger inn med e-posten sin og blir med i familien.</p><button class="btn block" id="inv">Kopier invitasjonslenke</button></div>
     <div class="box stack" style="gap:10px"><div class="row between"><div><div class="eyebrow">Abonnement</div><span class="price">${priceFor(n)} kr</span> <span class="muted">/ mnd</span></div><button class="btn sm ghost" id="up">Se prisen</button></div>
-      <div class="small">${PRICE.base} kr for ${PRICE.incl} personer${ex?` + ${ex} ${ex===1?'ekstra person':'ekstra personer'} à ${PRICE.extra} kr`:''} · ${n} ${n===1?'person':'personer'} i familien</div></div>
+      <div class="small">${PRICE.base} kr for ${PRICE.incl} personer (${PRICE.inclText})${ex?` + ${ex} ${ex===1?'ekstra person':'ekstra personer'} à ${PRICE.extra} kr`:''} · ${n} ${n===1?'person':'personer'} i familien</div></div>
     <div class="box" style="padding:4px 14px"><div class="list">${S.fam.members.map(m=>`<div class="item"><span class="avatar" style="background:${m.color};width:36px;height:36px">${esc(initials(m.name))}</span><div class="txt"><div><b>${esc(m.name)}</b>${m.id===S.mid?' <span class="muted small">(deg)</span>':''}${m.user_id?'':' <span class="muted small">· uten egen innlogging</span>'}</div><div class="meta">${items('todo').filter(t=>t.who===m.id&&!t.done).length} åpne gjøremål</div></div>${m.id!==S.mid&&S.fam.owner===(USER&&USER.id)?`<button class="x" data-rm="${m.id}" aria-label="Fjern ${esc(m.name)}">×</button>`:''}</div>`).join('')}</div></div>
     <button class="btn ghost block" id="addm">+ Legg til barn eller person uten mobil</button>
     ${schoolBox()}
@@ -575,8 +575,8 @@ function removeMemberSheet(id){const m=member(id);if(!m)return;const n=S.fam.mem
   <div class="row" style="gap:8px"><button class="btn line" id="no" style="flex:1">Avbryt</button><button class="btn" id="yes" style="flex:1">Fjern</button></div>`,()=>{
     $('#no').onclick=closeSheet;$('#yes').onclick=async()=>{await safe(Back.removeMember(id));act(`fjernet ${m.name} fra familien`);closeSheet()}})}
 function upgradeSheet(full){const n=S.fam.members.length;
-  const rows=[...Array(Math.min(PRICE.max,8))].map((_,i)=>i+1).filter(k=>k>=PRICE.incl);
-  sheet(`<h2>${full?'Familien er full':'Slik er prisen'}</h2><p class="muted" style="margin:0 0 12px">${full?`En familie kan ha opptil ${PRICE.max} personer.`:`${PRICE.base} kr i måneden dekker ${PRICE.incl} personer. Hver person ekstra koster ${PRICE.extra} kr i måneden. Alle får alt: felles uke, handleliste, gjøremål, middager, oppskrifter og varsler.`}</p>
+  const rows=[...Array(PRICE.max)].map((_,i)=>i+1).filter(k=>k>=PRICE.incl);
+  sheet(`<h2>${full?'Familien er full':'Slik er prisen'}</h2><p class="muted" style="margin:0 0 12px">${full?`En familie kan ha opptil ${PRICE.max} personer.`:`${PRICE.base} kr i måneden dekker ${PRICE.incl} personer, for eksempel ${PRICE.inclText}. Hver person ekstra koster ${PRICE.extra} kr i måneden. Alle får alt: felles uke, handleliste, gjøremål, middager, oppskrifter og varsler.`}</p>
   <div class="box" style="padding:4px 14px"><div class="list">${rows.map(k=>`<div class="item" style="${k===n?'font-weight:700;color:var(--head)':''}"><span class="txt">${k} personer${k===n?' (dere nå)':''}</span><span style="font-variant-numeric:tabular-nums">${priceFor(k)} kr/mnd</span></div>`).join('')}</div></div>
   <p class="muted small" style="margin:12px 0 0">Betaling med kort og Vipps settes opp før lansering.</p>`)}
 
