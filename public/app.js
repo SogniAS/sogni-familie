@@ -91,7 +91,7 @@ const Back={
 };
 
 /* ---------- state ---------- */
-const S={cal:'uke',year:new Date().getFullYear(),fid:null,mid:null,fam:null,items:[],priv:[],fr:[],acts:[],feeds:[],tab:'uke',week:0,todoWho:'alle',dinMonth:new Date().getMonth()+1,seen:null,unsubs:[],loaded:{fam:false,items:false,acts:false}};
+const S={cal:'ar',year:new Date().getFullYear(),fid:null,mid:null,fam:null,items:[],priv:[],fr:[],acts:[],feeds:[],tab:'uke',week:0,todoWho:'alle',dinMonth:new Date().getMonth()+1,seen:null,unsubs:[],loaded:{fam:false,items:false,acts:false}};
 const me=()=>S.fam&&S.fam.members.find(m=>m.id===S.mid);
 const member=id=>S.fam&&S.fam.members.find(m=>m.id===id);
 const mname=id=>{const m=member(id);return m?m.name:'Noen'};
@@ -246,9 +246,11 @@ const dinnerTitle=d=>{const k=keyOf(d),r=k!=null&&rec(k);return r?r.n:(d.text||(
 
 const VIEWS={
 uke:{
-  mount(el){const seg=`<div class="seg" role="tablist"><button data-cal="uke" aria-pressed="${S.cal==='uke'}">Uke</button><button data-cal="ar" aria-pressed="${S.cal==='ar'}">År</button></div>`;
+  mount(el){const seg=`<div class="seg" role="tablist"><button data-cal="ar" aria-pressed="${S.cal==='ar'}">År</button><button data-cal="uke" aria-pressed="${S.cal==='uke'}">Uke</button></div>`;
     if(S.cal==='ar'){el.innerHTML=seg+`<div class="sechead"><div><div class="eyebrow">Hele året</div><h2>${S.year}</h2></div><div class="weeknav"><button class="navbtn" id="yp" aria-label="Forrige år">‹</button>${S.year!==new Date().getFullYear()?'<button class="btn sm ghost" id="y0">I år</button>':''}<button class="navbtn" id="yn" aria-label="Neste år">›</button></div></div>
-      <p class="muted small" style="margin:-4px 0 12px">Trykk på en dato for å skrive inn noe. Prikk betyr at noe skjer den dagen. Røde datoer er søndager og helligdager. Grønne dager er fri fra skolen. Tallet til venstre er ukenummeret.</p><div class="months" id="months"></div>`;
+      <div class="field" style="margin-bottom:12px"><label for="wpick">Gå til uke</label><select class="input" id="wpick">${weekOptions(S.year)}</select></div>
+      <p class="muted small" style="margin:-4px 0 12px">Trykk på en dato for å skrive inn noe, eller på ukenummeret til venstre for å se hele uka. Prikk betyr at noe skjer den dagen. Røde datoer er søndager og helligdager. Grønne dager er fri fra skolen.</p><div class="months" id="months"></div>`;
+      $('#wpick').onchange=e=>{if(e.target.value)goWeek(e.target.value)};
       $('#yp').onclick=()=>{S.year--;setTab('uke')};$('#yn').onclick=()=>{S.year++;setTab('uke')};const y0=$('#y0');if(y0)y0.onclick=()=>{S.year=new Date().getFullYear();setTab('uke')};}
     else{el.innerHTML=seg+weekNav()+`<button class="btn block" id="addEv" style="margin-bottom:14px">+ Legg til avtale</button><div class="stack" id="days"></div>`;bindWeekNav();$('#addEv').onclick=()=>eventSheet()}
     el.querySelectorAll('[data-cal]').forEach(b=>b.onclick=()=>{S.cal=b.dataset.cal;setTab('uke')})},
@@ -342,11 +344,16 @@ function toggleTodo(id,on){const x=findItem(id);if(!x)return;const d=Object.assi
 function paintYear(){const y=S.year,today=ymd(new Date()),hol=holidays(y),ev=items('event');
   const busy={},sk={};const start=new Date(y,0,1);for(let d=new Date(start);d.getFullYear()===y;d.setDate(d.getDate()+1)){const k=ymd(d);if(ev.some(x=>(!x.repeat||x.repeat==='weekly'||x.repeat==='biweekly'?occurs(x,k):false)))busy[k]=1;const sd=schoolDay(k);if(sd&&sd.off)sk[k]=sd.name}
   $('#months').innerHTML=MONTHS.map((mn,m)=>{const first=new Date(y,m,1),lead=(first.getDay()+6)%7,n=new Date(y,m+1,0).getDate();
-    let cells='<span class="wd wk">uke</span><span class="wd">M</span><span class="wd">T</span><span class="wd">O</span><span class="wd">T</span><span class="wd">F</span><span class="wd">L</span><span class="wd red">S</span>'+`<span class="wk">${isoWeek(first)}</span>`+'<span></span>'.repeat(lead);
-    for(let i=1;i<=n;i++){const k=y+'-'+pad(m+1)+'-'+pad(i),dow=(lead+i-1)%7;if(dow===0&&i>1)cells+=`<span class="wk">${isoWeek(new Date(y,m,i))}</span>`;cells+=`<button class="dd${k===today?' today':''}${hol[k]||dow===6?' red':''}${busy[k]?' busy':''}${sk[k]?' ferie':''}" data-d="${k}" aria-label="${longDate(k)}${hol[k]?', '+hol[k]:''}${sk[k]?', '+sk[k]:''}${busy[k]?', har avtaler':''}">${i}</button>`}
+    let cells='<span class="wd wk">uke</span><span class="wd">M</span><span class="wd">T</span><span class="wd">O</span><span class="wd">T</span><span class="wd">F</span><span class="wd">L</span><span class="wd red">S</span>'+`<button class="wk" data-wk="${ymd(first)}" aria-label="Vis uke ${isoWeek(first)}">${isoWeek(first)}</button>`+'<span></span>'.repeat(lead);
+    for(let i=1;i<=n;i++){const k=y+'-'+pad(m+1)+'-'+pad(i),dow=(lead+i-1)%7;if(dow===0&&i>1)cells+=`<button class="wk" data-wk="${k}" aria-label="Vis uke ${isoWeek(new Date(y,m,i))}">${isoWeek(new Date(y,m,i))}</button>`;cells+=`<button class="dd${k===today?' today':''}${hol[k]||dow===6?' red':''}${busy[k]?' busy':''}${sk[k]?' ferie':''}" data-d="${k}" aria-label="${longDate(k)}${hol[k]?', '+hol[k]:''}${sk[k]?', '+sk[k]:''}${busy[k]?', har avtaler':''}">${i}</button>`}
     const hs=Object.keys(hol).filter(k=>+k.slice(5,7)===m+1).map(k=>[k,`<li><b>${+k.slice(8)}.</b> ${hol[k]}</li>`]).concat(schoolPeriods(y,m).map(o=>[o[0],`<li class="sk"><b>${rangeTxt(o[0],o[1])}</b> ${esc(o[2])}</li>`])).sort((a,b)=>a[0].localeCompare(b[0]));
     return `<section class="mon"><h3>${mn}</h3><div class="mgrid">${cells}</div>${hs.length?`<ul class="hlist">${hs.map(h=>h[1]).join('')}</ul>`:''}</section>`}).join('');
-  $('#months').querySelectorAll('[data-d]').forEach(b=>b.onclick=()=>daySheet(b.dataset.d))}
+  $('#months').querySelectorAll('[data-d]').forEach(b=>b.onclick=()=>daySheet(b.dataset.d));
+  $('#months').querySelectorAll('[data-wk]').forEach(b=>b.onclick=()=>goWeek(b.dataset.wk))}
+// Uke-velger i årsvisningen: hopp rett til en uke
+function goWeek(k){S.cal='uke';S.week=weekOffsetOf(k);setTab('uke')}
+function weekOptions(y){const j4=new Date(y,0,4,12);const mon=new Date(j4);mon.setDate(j4.getDate()-((j4.getDay()+6)%7));const n=isoWeek(new Date(y,11,28,12));const cur=isoWeek(new Date()),thisYear=new Date().getFullYear()===y;let o='<option value="">Velg uke …</option>';
+  for(let w=1;w<=n;w++){const a=new Date(mon);a.setDate(mon.getDate()+(w-1)*7);const b=new Date(a);b.setDate(a.getDate()+6);o+=`<option value="${ymd(a)}">Uke ${w} · ${a.getDate()}. ${MONTHS[a.getMonth()].slice(0,3)} – ${b.getDate()}. ${MONTHS[b.getMonth()].slice(0,3)}${thisYear&&w===cur?' (denne uka)':''}</option>`}return o}
 function daySheet(k){const e=items('event').filter(x=>occurs(x,k)).sort((a,b)=>(a.time||'99').localeCompare(b.time||'99'));const h=holidays(parseYmd(k).getFullYear())[k],sd=schoolDay(k);
   if(!e.length&&!h&&!sd){eventSheet(k);return}
   sheet(`<div class="eyebrow">${parseYmd(k).getFullYear()}</div><h2 style="text-transform:capitalize">${longDate(k)}</h2>${h?`<p class="small" style="margin:4px 0 0;color:var(--rose);font-weight:700">${h}</p>`:''}${sd?`<p class="small sklabel" style="margin:4px 0 0">🎒 ${esc(sd.name)}</p>`:''}
